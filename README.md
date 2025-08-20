@@ -1,117 +1,125 @@
 # 📌 Automated Attendance Marker (MAHE SLCM)
 
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/)
-[![Selenium](https://img.shields.io/badge/selenium-latest-green.svg)](https://www.selenium.dev/)
-[![License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
-
-This project automates the process of **marking attendance** on the **MAHE SLCM portal** using Selenium and an Excel file.  
-It reads the list of absentees from `OS V attendance.xlsx` and automates navigation + marking directly in the portal.  
+This project automates the attendance marking process on **MAHE SLCM (Salesforce Lightning)** using **Python + Selenium**.  
+It extracts **absentees from an Excel sheet** (`attendance.xlsx`) and unticks them on the attendance portal, then submits and confirms the attendance automatically.  
 
 ---
 
-## 🚀 Features
-- 🔑 **Chrome profile reuse** → no login required each time.  
-- 📊 **Excel-based absentees** → auto-read from `Attendance` sheet.  
-- ⚡ **Fast navigation** → skips delays in Calendar/Attendance tab.  
-- ✅ Automatically **unticks absentees** and submits.  
-- 🖥 Works on **Windows, macOS, Linux**.  
-- 📜 Prints a **summary** in the terminal:
-  - ✔️ Number of students unticked  
-  - ❓ Students not found  
+## ✨ Features
+- ✅ Reads absentees list directly from **Excel** (`OS V attendance.xlsx`).  
+- ✅ Fast navigation (optimized calendar & Attendance tab click).  
+- ✅ Supports **manual login once per day** (profile reuse keeps session).  
+- ✅ Cross-platform: **Windows / macOS / Linux**.  
+- ✅ Logs output to terminal:  
+  - Students **unticked (absentees handled)**.  
+  - Students **not found**.  
+  - Final **summary counts**.  
+- ✅ Developer credit footer at end of run.  
 
 ---
 
-## 📂 Excel Format
+## 🛠 Requirements
 
-File: **`OS V attendance.xlsx`**
+- **Python 3.10+** must be installed on your system.  
+  👉 [Download Python](https://www.python.org/downloads/)  
 
-### Sheets
-- **Attendance**
-  - Column A → `Reg. No.`  
-  - Column B → `Name`  
-  - Column G onward → Dates (d/m/Y format)  
-  - Value `ab` → absentee  
-- **Initial Setup**
-  - Cell `B2` → Subject Code  
+- **Google Chrome** (latest version).  
 
-Example:
+- Python dependencies are listed in `requirements.txt`:  
+  ```
+  selenium
+  pandas
+  openpyxl
+  webdriver-manager
+  ```
 
-| Reg. No. | Name       | 19/08/2025 | 20/08/2025 |
-|----------|------------|------------|------------|
-| 230905001 | Student A |            | ab         |
-| 230905002 | Student B | ab         |            |
+> 🔹 `webdriver-manager` automatically manages the correct ChromeDriver for your installed Chrome version. No manual downloads needed.  
 
 ---
 
-## 🛠 Installation
+## 📂 Files in this Project
 
-Clone repo:
-```bash
-git clone https://github.com/your-username/mahe-attendance-automation.git
-cd mahe-attendance-automation
-```
+- `maa.py` → Main automation script  
+- `attendance.xlsx` → Excel file with attendance data  
+- `requirements.txt` → Python dependencies  
+- `README.md` → Documentation (this file)  
 
-Install dependencies:
+---
+
+## ⚙️ Installation & Setup
+
+### 1. Install Python (if not installed)
+- [Download Python](https://www.python.org/downloads/)  
+- During installation on **Windows**, check **“Add Python to PATH”**.  
+
+### 2. Install project dependencies
+Open a terminal/command prompt in the project folder and run:  
 ```bash
 pip install -r requirements.txt
 ```
 
-`requirements.txt`
+If you face issues with `pip`, try:
+```bash
+python -m pip install -r requirements.txt
 ```
-selenium
-pandas
-openpyxl
-chromedriver-autoinstaller
+
+### 3. Verify dependencies
+Run this in terminal:  
+```bash
+python -m pip show selenium pandas openpyxl webdriver-manager
 ```
+If all 4 packages are listed, setup is complete. ✅  
 
 ---
 
 ## ▶️ Usage
 
-### Windows
-```bat
+### Run for **today’s date**
+```bash
 python maa.py
 ```
 
-### macOS / Linux
-```bash
-python3 maa.py
-```
-
-With a specific date:
+### Run for a **specific date** (format: `DD/MM/YYYY`)
 ```bash
 python maa.py 20/08/2025
 ```
 
 ---
 
-## ⚙️ How It Works
-1. Opens Chrome with your profile.  
-2. Loads SLCM portal → waits for login (SSO/OTP).  
-3. Selects **date** in Calendar.  
-4. Opens **subject** → Attendance tab.  
-5. Unticks absentees listed in Excel.  
-6. Submits & confirms.  
-7. Prints a **summary** in the terminal.  
+## 🚀 How It Works
+
+1. Opens Chrome using a dedicated profile (`slcm_automation_profile`).  
+   - First time: You must log in (SSO/OTP manually).  
+   - Next runs: The login session is reused.  
+
+2. Navigates to:  
+   - **Calendar → Selected Date → Subject → Attendance Tab**  
+
+3. Unticks all **absentees** found in Excel.  
+
+4. Clicks **Submit Attendance** → **Confirm Submission**.  
+
+5. Prints **summary of results** in terminal.  
 
 ---
 
-## 📸 Example Terminal Output
+## 📊 Example Output
 ```
-📅 Using date: 20/08/2025 (today)
+📅 Using date: 2025-08-20 (today)
 ✅ Using date column in sheet: 20/08/2025
-Absentees (IDs to untick): ['230905001', '230905002']
-
+Absentees (IDs to untick): ['230905023', '230905098', '230905108']
+🌐 After bootstrap: https://maheslcmtech.lightning.force.com/...
+✅ Logged in & on Lightning Home
+✅ Clicked calendar date (fast): 20
+✅ Opened Attendance tab (fast)
 🔎 Searching for each absentee ID on page...
-✔️ Unticked absentee: 230905001
-❓ Not found (1): ['230905002']
-
-✔️ Unticked (absentees): 1
-❓ Not unticked: 1
-
+✔️ Unticked absentee: 230905023
+✔️ Unticked absentee: 230905098
+❓ Not found (1): ['230905108']
+✔️ Unticked (absentees): 2
 ✅ Clicked Submit Attendance
-✅ Confirmed submission
-
+✅ Confirmation modal visible
+✅ Clicked Confirm via locator: .//button[normalize-space()='Confirm Submission']
 🎉 Attendance marking complete!
 
 =================================================
@@ -121,11 +129,17 @@ Absentees (IDs to untick): ['230905001', '230905002']
 
 ---
 
-## 👨‍💻 Developer
-**Anirudhan Adukkathayar C**  
-📍 SCE, MIT  
+## 🖥️ Notes
+
+- First run may be slower due to login/OTP. Subsequent runs are faster.  
+- If you face **profile in use errors**, close all Chrome windows before running.  
+- If UI changes in SLCM portal, XPath selectors may need updates.  
+- On **Windows**, run scripts using `python` in **Command Prompt** or **PowerShell**.  
+- On **macOS/Linux**, run in **Terminal**.  
 
 ---
 
-## 📜 License
-MIT License – feel free to use and modify.
+## 👨‍💻 Developer
+
+**Anirudhan Adukkathayar C**  
+*SCE, MIT*  
