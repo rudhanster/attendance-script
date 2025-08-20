@@ -16,7 +16,7 @@ from selenium.webdriver.common.keys import Keys
 # =============================
 # Config
 # =============================
-file_path = "./OS V attendance.xlsx"  # Excel file name
+file_path = "./attendance.xlsx"  # Excel file name
 
 HOME_URL  = "https://maheslcmtech.lightning.force.com/lightning/page/home"
 BASE_URL  = "https://maheslcmtech.lightning.force.com"
