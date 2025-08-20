@@ -14,7 +14,7 @@ It extracts **absentees from an Excel sheet** (`attendance.xlsx`) and unticks th
   - Students **unticked (absentees handled)**.  
   - Students **not found**.  
   - Final **summary counts**.  
-- ✅ Developer credit footer at end of run.  
+
 
 ---
 
@@ -81,6 +81,8 @@ If all 4 packages are listed, setup is complete. ✅
 
 check file name of excel sheet and the name mentioned in maa.py(`attendance.xlsx`) and path are same. if not make changes.
 It is better to put excel sheet and program (`maa.py`) in same folder
+
+### 5. Verify attandance excel file contain subject code
 ---
 
 ## ▶️ Usage
