@@ -186,8 +186,7 @@ options.add_argument("--no-default-browser-check")
 
 # 👉 webdriver-manager auto-installs the matching ChromeDriver
 service = Service(ChromeDriverManager().install())
-driver = webdriver.Chrome(service=service, options=options)
-
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 # --- Bootstrap: force navigation & handle SSO once ---
 if not hard_nav(driver, HOME_URL):
     hard_nav(driver, BASE_URL)
@@ -301,7 +300,7 @@ try:
         try:
             confirm_btn = WebDriverWait(modal, 4).until(EC.element_to_be_clickable((By.XPATH, xp)))
             js_click(driver, confirm_btn)
-            print(f"✅ Clicked Confirm via locator: {xp}")
+            print(f"✅ Clicked Confirm ")
             confirm_clicked = True
             break
         except Exception:
