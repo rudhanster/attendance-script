@@ -1,158 +1,95 @@
-# 📌 Automated Attendance Marker (MAHE SLCM)
+# Automated Attendance Marker (MAHE SLCM)
 
-This project automates the attendance marking process on **MAHE SLCM (Salesforce Lightning)** using **Python + Selenium**.  
-It extracts **absentees from an Excel sheet** (`attendance.xlsx`) and unticks them on the attendance portal, then submits and confirms the attendance automatically.  
-
----
-
-## ✨ Features
-- ✅ Reads absentees list directly from **Excel** (`attendance.xlsx`).  
-- ✅ Fast navigation (optimized calendar & Attendance tab click).  
-- ✅ Supports **manual login once per day** (profile reuse keeps session).  
-- ✅ Cross-platform: **Windows / macOS / Linux**.  
-- ✅ Logs output to terminal:  
-  - Students **unticked (absentees handled)**.  
-  - Students **not found**.  
-  - Final **summary counts**.  
-
+This project automates attendance marking in the **MAHE SLCM portal** using Selenium and an Excel file.
 
 ---
 
-## 🛠 Requirements
-
-- **Python 3.10+** must be installed on your system.  
-
-  👉Install Python from the Microsoft Store:
-Open the Microsoft Store application on your Windows machine. You can do this by searching for "Microsoft Store" in the Start menu.
-In the Microsoft Store, use the search bar at the top to search for "Python".
-You will see various Python versions listed. Select the official Python application, typically published by the Python Software Foundation (PSF), and choose the latest stable version available.
-Click the "Get" or "Install" button on the Python app page. The Microsoft Store will then download and install Python on your system. 
-                or
-  👉 [Download Python](https://www.python.org/downloads/)
-
-- **Google Chrome** (latest version).  
-
-- Python dependencies are listed in `requirements.txt`:  
-  ```
-  selenium
-  pandas
-  openpyxl
-  webdriver-manager
-  ```
-
-> 🔹 `webdriver-manager` automatically manages the correct ChromeDriver for your installed Chrome version. No manual downloads needed.  
+## 🚀 Features
+- Reads absentees from an Excel file (`attendance.xlsx`).
+- Automatically logs in via your saved Chrome profile (no need to log in every time).
+- Opens Calendar, selects the correct date and subject.
+- Unticks absent students in the SLCM portal.
+- Submits and confirms attendance.
+- Prints summary of unticked and not-found students in the terminal.
 
 ---
 
-## 📂 Files in this Project
+## ⚙️ Requirements
 
-- `maa.py` → Main automation script  
-- `attendance.xlsx` → Excel file with attendance data  
-- `requirements.txt` → Python dependencies  
-- `README.md` → Documentation (this file)  
+1. **Python Installation**
+   - Install **Python 3.11+**.
+   - On **Windows**, the easiest way:
+     - Open Microsoft Store.
+     - Search for **Python 3.11** (or later).
+     - Click **Get** and install.
+   - Verify installation:
+     ```bash
+     python --version
+     ```
+     or
+     ```bash
+     py --version
+     ```
 
----
+2. **Install Dependencies**
+   - Open **Command Prompt** (Windows) or **Terminal** (macOS/Linux).
+   - Navigate to the project folder where `requirements.txt` is located.
+   - Run:
+     ```bash
+     pip install -r requirements.txt
+     ```
 
-## ⚙️ Installation & Setup
+3. **Google Chrome**
+   - Install the latest **Google Chrome** browser from [Google Chrome Download](https://www.google.com/chrome/).
 
-### 1. Install Python (if not installed)
-- [Download Python](https://www.python.org/downloads/)  
-- During installation on **Windows**, check **“Add Python to PATH”**.  
-
-### 2. Install project dependencies
-Open a terminal/command prompt in the project folder and run:  
-```bash
-pip install -r requirements.txt
-```
-
-If you face issues with `pip`, try:
-```bash
-python -m pip install -r requirements.txt
-```
-
-### 3. Verify dependencies
-Run this in terminal:  
-```bash
-python -m pip show selenium pandas openpyxl webdriver-manager
-```
-If all 4 packages are listed, setup is complete. ✅  
-
-### 4. Verify attandance excel file name
-
-check file name of excel sheet and the name mentioned in maa.py(`attendance.xlsx`) and path are same. if not make changes.
-It is better to put excel sheet and program (`maa.py`) in same folder
-
-### 5. Verify attandance excel file contain subject code
----
-
-## ▶️ Usage
-
-### Run for **today’s date**
-```bash
-python maa.py
-```
-
-### Run for a **specific date** (format: `DD/MM/YYYY`)
-```bash
-python maa.py 20/08/2025
-```
+4. **ChromeDriver**
+   - The script uses `webdriver_manager` to download the correct version of ChromeDriver automatically.
+   - Ensure Chrome is installed and updated.
 
 ---
 
-## 🚀 How It Works
+## 📂 Project Setup
 
-1. Opens Chrome using a dedicated profile (`slcm_automation_profile`).  
-   - First time: You must log in (SSO/OTP manually).  
-   - Next runs: The login session is reused.  
-
-2. Navigates to:  
-   - **Calendar → Selected Date → Subject → Attendance Tab**  
-
-3. Unticks all **absentees** found in Excel.  
-
-4. Clicks **Submit Attendance** → **Confirm Submission**.  
-
-5. Prints **summary of results** in terminal.  
+1. Clone or download this repository.
+2. Place your **Excel file** in the project directory.
+   - The file **must be named exactly**:
+     ```
+     attendance.xlsx
+     ```
+3. Ensure the Excel format:
+   - Sheet **"Attendance"** contains registration numbers and attendance (`ab` for absentees).
+   - Sheet **"Initial Setup"**, cell **B2**, contains the **course code**.  
+     ⚠️ This course code must exactly match the subject code shown in SLCM Calendar events.
 
 ---
 
-## 📊 Example Output
-```
-📅 Using date: 2025-08-20 (today)
-✅ Using date column in sheet: 20/08/2025
-Absentees (IDs to untick): ['230905023', '230905098', '230905108']
-🌐 After bootstrap: https://maheslcmtech.lightning.force.com/...
-✅ Logged in & on Lightning Home
-✅ Clicked calendar date (fast): 20
-✅ Opened Attendance tab (fast)
-🔎 Searching for each absentee ID on page...
-✔️ Unticked absentee: 230905023
-✔️ Unticked absentee: 230905098
-❓ Not found (1): ['230905108']
-✔️ Unticked (absentees): 2
-✅ Clicked Submit Attendance
-✅ Confirmation modal visible
-✅ Clicked Confirm via locator: .//button[normalize-space()='Confirm Submission']
-🎉 Attendance marking complete!
+## ▶️ Running the Script
 
-=================================================
-👨‍💻 Developed by: Anirudhan Adukkathayar C, SCE, MIT
-=================================================
-```
+1. Open terminal/command prompt in the project folder.
+2. Run the script:
+   ```bash
+   python maa.py
+   ```
+   Or, specify a date:
+   ```bash
+   python maa.py 20/08/2025
+   ```
+
+3. The script will:
+   - Launch Chrome with your automation profile.
+   - Navigate to the MAHE SLCM portal.
+   - If SSO/OTP login is required, complete it in Chrome.
+   - Automatically proceed with attendance marking.
 
 ---
 
-## 🖥️ Notes
-
-- First run may be slower due to login/OTP. Subsequent runs are faster.  
-- If you face **profile in use errors**, close all Chrome windows before running.  
-- If UI changes in SLCM portal, XPath selectors may need updates.  
-- On **Windows**, run scripts using `python` in **Command Prompt** or **PowerShell**.  
-- On **macOS/Linux**, run in **Terminal**.  
+## 📊 Output
+At the end of execution, the script prints:
+- ✅ Number of absentees successfully unticked.
+- ❓ Students not found in the portal.
+- 🎉 Confirmation that attendance was submitted.
 
 ---
 
 ## 👨‍💻 Developer
-
-**Anirudhan Adukkathayar C**  
-*SCE, MIT*  
+**Developed by:** Anirudhan Adukkathayar C, SCE, MIT
