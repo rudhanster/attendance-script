@@ -1,6 +1,7 @@
 import sys
 import os
 import time
+import re
 import pandas as pd
 from datetime import datetime
 
@@ -12,6 +13,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 
 # =============================
 # Config
@@ -63,7 +65,7 @@ def click_attendance_tab_fast(driver):
     if (!el) {
         const span = Array.from(document.querySelectorAll('span.title'))
             .find(s => (s.textContent || '').trim() === 'Attendance');
-        if (span) el = span.closest('a, button, [role=\"tab\"]') || span;
+        if (span) el = span.closest('a, button, [role="tab"]') || span;
     }
     if (el) {
         el.scrollIntoView({block:'center'});
@@ -137,11 +139,27 @@ else:
     print(f"📅 Using date: {selected_date} (today)")
 
 # =============================
-# 2) Load Excel file (OS V attendance.xlsx)
+# 2) Load Excel file + Initial Setup fields
 # =============================
 attendance_df = pd.read_excel(file_path, sheet_name="Attendance", header=1)
 setup_df = pd.read_excel(file_path, sheet_name="Initial Setup", header=None)
-subject_code = str(setup_df.iloc[1, 1]).strip()
+
+# Extract values from Initial Setup (Column B values on rows 1..5)
+course_name   = str(setup_df.iloc[0, 1]).strip() if len(setup_df) > 0 else ""
+course_code   = str(setup_df.iloc[1, 1]).strip() if len(setup_df) > 1 else ""
+semester      = str(setup_df.iloc[2, 1]).strip() if len(setup_df) > 2 else ""
+class_section = str(setup_df.iloc[3, 1]).strip() if len(setup_df) > 3 else ""
+session_no    = str(setup_df.iloc[4, 1]).strip() if len(setup_df) > 4 else ""
+
+print("\n📘 Course Details from Initial Setup:")
+print(f"   Course Name   : {course_name}")
+print(f"   Course Code   : {course_code}")
+print(f"   Semester      : {semester}")
+print(f"   Class Section : {class_section}")
+print(f"   Session       : {session_no}\n")
+
+# Keep subject_code for fallback search/compat
+subject_code = course_code
 
 def find_date_column(columns, target_date):
     for col in columns:
@@ -174,7 +192,6 @@ print("Absentees (IDs to untick):", absentees)
 # =============================
 # 3) Selenium with webdriver-manager (auto ChromeDriver)
 # =============================
-# You can switch to your real Chrome profile by replacing the profile dir below
 PROFILE_DIR = os.path.abspath("./slcm_automation_profile")  # dedicated reusable profile
 os.makedirs(PROFILE_DIR, exist_ok=True)
 
@@ -184,9 +201,8 @@ options.add_argument("--no-first-run")
 options.add_argument("--no-default-browser-check")
 # options.add_argument("--headless=new")  # uncomment to run headless if needed
 
-# 👉 webdriver-manager auto-installs the matching ChromeDriver
-service = Service(ChromeDriverManager().install())
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
 # --- Bootstrap: force navigation & handle SSO once ---
 if not hard_nav(driver, HOME_URL):
     hard_nav(driver, BASE_URL)
@@ -219,12 +235,98 @@ time.sleep(0.15)
 day_number = str(selected_date.day).lstrip("0")
 click_calendar_date_fast(driver, day_number)
 
-# Click subject event tile
-event_xpath = f"//a[contains(@role,'button') and contains(., '{subject_code}')]"
-event_tile = WebDriverWait(driver, 20).until(
-    EC.element_to_be_clickable((By.XPATH, event_xpath))
-)
-js_click(driver, event_tile)
+# ---------- SMART EVENT TILE MATCHING (stale-safe) ----------
+def _norm(s: str) -> str:
+    return " ".join((s or "").split())
+
+def matches_event_text(txt: str, code: str, sem: str, sec: str, sess: str) -> bool:
+    """
+    Example event text:
+    "CSE 3142 - CSE 3142 - OPERATING SYSTEMS LAB - 905 - Semester V: Program Sec B-1."
+    Match on:
+      - course code -> "CSE 3142"
+      - semester    -> "Semester V"
+      - section     -> "Sec B" or "Section B"
+      - session     -> optional: "B-1" (Sec-section style) or "Session 1"
+    """
+    t = _norm(txt)
+    T = t.upper()
+
+    ok = True
+    if code:
+        ok = ok and (code.upper() in T)
+    if sem:
+        ok = ok and bool(re.search(rf"\bSEMESTER\s*{re.escape(sem)}\b", T, flags=re.I))
+    if sec:
+        ok = ok and bool(re.search(rf"\bSEC(?:TION)?\s*{re.escape(sec)}\b", T, flags=re.I))
+    if sess and sess.strip():
+        sess = sess.strip()
+        sess_ok = False
+        # "B-1" (or "B - 1")
+        if sec and re.search(rf"\b{re.escape(sec)}\s*-\s*{re.escape(sess)}\b", T, flags=re.I):
+            sess_ok = True
+        # "Session 1"
+        if not sess_ok and re.search(rf"\bSESSION\s*{re.escape(sess)}\b", T, flags=re.I):
+            sess_ok = True
+        ok = ok and sess_ok
+    return ok
+
+def collect_tiles_pairs():
+    """Return list of (webelement, text) pairs; ignore stale items."""
+    pairs = []
+    els = driver.find_elements(By.XPATH, "//a[contains(@role,'button')]")
+    for el in els:
+        try:
+            txt = el.get_attribute("innerText") or el.text or ""
+            pairs.append((el, txt))
+        except StaleElementReferenceException:
+            continue
+    return pairs
+
+# Try multiple passes to avoid stale references right after the date render
+candidates = []
+for attempt in range(5):
+    pairs = collect_tiles_pairs()
+    # strict match first
+    candidates = [el for (el, txt) in pairs if matches_event_text(txt, course_code, semester, class_section, session_no)]
+    if candidates:
+        break
+    # fallback to course code only
+    if not candidates and course_code:
+        for (el, txt) in pairs:
+            if (course_code or "").upper() in (txt or "").upper():
+                candidates.append(el)
+        if candidates:
+            break
+    time.sleep(0.3)  # tiny backoff to let DOM settle
+
+if not candidates:
+    print("⚠️ No event matched the criteria. Available tiles were:")
+    for (_, txt) in collect_tiles_pairs():
+        print(" -", _norm(txt))
+    raise RuntimeError("❌ Could not find a matching subject tile for the selected date.")
+
+# Click the first matched candidate; refetch if it goes stale during click
+clicked = False
+for _ in range(3):
+    try:
+        event_tile = WebDriverWait(driver, 10).until(EC.element_to_be_clickable(candidates[0]))
+        js_click(driver, event_tile)
+        clicked = True
+        break
+    except StaleElementReferenceException:
+        fresh = []
+        for (el, txt) in collect_tiles_pairs():
+            if matches_event_text(txt, course_code, semester, class_section, session_no) or (
+                course_code and (course_code.upper() in (txt or "").upper())
+            ):
+                fresh.append(el)
+        if fresh:
+            candidates[0] = fresh[0]
+        time.sleep(0.2)
+
+if not clicked:
+    raise RuntimeError("❌ Found a matching tile but failed to click it due to staleness.")
 
 # Click "More Details" if popover appears; otherwise Lightning may navigate directly
 try:
@@ -239,26 +341,44 @@ except Exception:
 click_attendance_tab_fast(driver)
 
 # =============================
-# 5) Untick Absentees + console summary
+# 5) Untick Absentees + console summary (stale-safe per absentee)
 # =============================
 print("🔎 Searching for each absentee ID on page...")
 unticked_ids = []
 not_found = []
 
+def untick_absentee_once(ab):
+    """Find row+checkbox fresh and untick if selected. Returns True if unticked, False if already unticked."""
+    cell = WebDriverWait(driver, 8).until(
+        EC.presence_of_element_located((By.XPATH, f"//lightning-base-formatted-text[normalize-space()='{ab}']"))
+    )
+    row = cell.find_element(By.XPATH, "./ancestor::tr")
+    checkbox = row.find_element(By.XPATH, ".//input[@type='checkbox']")
+    driver.execute_script("arguments[0].scrollIntoView({block:'center'});", checkbox)
+    if checkbox.is_selected():
+        js_click(driver, checkbox)
+        return True
+    return False
+
 for ab in absentees:
-    try:
-        cell = WebDriverWait(driver, 6).until(
-            EC.presence_of_element_located((By.XPATH, f"//lightning-base-formatted-text[normalize-space()='{ab}']"))
-        )
-        row = cell.find_element(By.XPATH, "./ancestor::tr")
-        checkbox = row.find_element(By.XPATH, ".//input[@type='checkbox']")
-        if checkbox.is_selected():
-            js_click(driver, checkbox)
-            print(f"✔️ Unticked absentee: {ab}")
-            unticked_ids.append(ab)
-        else:
-            print(f"ℹ️ Already unticked: {ab}")
-    except Exception:
+    success = False
+    attempts = 0
+    while attempts < 4 and not success:
+        try:
+            if untick_absentee_once(ab):
+                print(f"✔️ Unticked absentee: {ab}")
+                unticked_ids.append(ab)
+            else:
+                print(f"ℹ️ Already unticked: {ab}")
+            success = True
+        except (StaleElementReferenceException, TimeoutException):
+            # Table likely re-rendered; retry with fresh lookup
+            attempts += 1
+            time.sleep(0.3)
+        except Exception:
+            break
+    if not success:
+        print(f"❌ Not found on page: {ab}")
         not_found.append(ab)
 
 # --- Final summary in console ---
@@ -300,7 +420,7 @@ try:
         try:
             confirm_btn = WebDriverWait(modal, 4).until(EC.element_to_be_clickable((By.XPATH, xp)))
             js_click(driver, confirm_btn)
-            print(f"✅ Clicked Confirm ")
+            print("✅ Clicked Confirm")
             confirm_clicked = True
             break
         except Exception:
