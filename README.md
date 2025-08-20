@@ -77,6 +77,10 @@ python -m pip show selenium pandas openpyxl webdriver-manager
 ```
 If all 4 packages are listed, setup is complete. ✅  
 
+### 4. Verify attandance excel file name
+
+check file name of excel sheet and the name mentioned in maa.py(`attendance.xlsx`) and path are same. if not make changes.
+It is better to put excel sheet and program (`maa.py`) in same folder
 ---
 
 ## ▶️ Usage
