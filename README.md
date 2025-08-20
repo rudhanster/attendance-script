@@ -42,9 +42,8 @@ This project automates attendance marking in the **MAHE SLCM portal** using Sele
 3. **Google Chrome**
    - Install the latest **Google Chrome** browser from [Google Chrome Download](https://www.google.com/chrome/).
 
-4. **ChromeDriver**
-   - The script uses `webdriver_manager` to download the correct version of ChromeDriver automatically.
-   - Ensure Chrome is installed and updated.
+
+
 
 ---
 
