@@ -21,7 +21,14 @@ It extracts **absentees from an Excel sheet** (`attendance.xlsx`) and unticks th
 ## 🛠 Requirements
 
 - **Python 3.10+** must be installed on your system.  
-  👉 [Download Python](https://www.python.org/downloads/)  
+
+  👉Install Python from the Microsoft Store:
+Open the Microsoft Store application on your Windows machine. You can do this by searching for "Microsoft Store" in the Start menu.
+In the Microsoft Store, use the search bar at the top to search for "Python".
+You will see various Python versions listed. Select the official Python application, typically published by the Python Software Foundation (PSF), and choose the latest stable version available.
+Click the "Get" or "Install" button on the Python app page. The Microsoft Store will then download and install Python on your system. 
+                or
+  👉 [Download Python](https://www.python.org/downloads/)
 
 - **Google Chrome** (latest version).  
 
