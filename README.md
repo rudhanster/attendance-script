@@ -6,7 +6,7 @@ It extracts **absentees from an Excel sheet** (`attendance.xlsx`) and unticks th
 ---
 
 ## ✨ Features
-- ✅ Reads absentees list directly from **Excel** (`OS V attendance.xlsx`).  
+- ✅ Reads absentees list directly from **Excel** (`attendance.xlsx`).  
 - ✅ Fast navigation (optimized calendar & Attendance tab click).  
 - ✅ Supports **manual login once per day** (profile reuse keeps session).  
 - ✅ Cross-platform: **Windows / macOS / Linux**.  
