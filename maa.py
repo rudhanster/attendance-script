@@ -3,13 +3,24 @@ import os
 import time
 import pandas as pd
 from datetime import datetime
+
 from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.keys import Keys
 
-file_path = "./OS V attendance.xlsx"
+# =============================
+# Config
+# =============================
+file_path = "./OS V attendance.xlsx"  # Excel file name
+
+HOME_URL  = "https://maheslcmtech.lightning.force.com/lightning/page/home"
+BASE_URL  = "https://maheslcmtech.lightning.force.com"
+LOGIN_URL = "https://maheslcm.manipal.edu/login"
 
 # =============================
 # Fast helpers
@@ -52,7 +63,7 @@ def click_attendance_tab_fast(driver):
     if (!el) {
         const span = Array.from(document.querySelectorAll('span.title'))
             .find(s => (s.textContent || '').trim() === 'Attendance');
-        if (span) el = span.closest('a, button, [role="tab"]') || span;
+        if (span) el = span.closest('a, button, [role=\"tab\"]') || span;
     }
     if (el) {
         el.scrollIntoView({block:'center'});
@@ -72,6 +83,49 @@ def click_attendance_tab_fast(driver):
     js_click(driver, att_tab)
     print("✅ Opened Attendance tab (fallback)")
 
+def ready(driver):
+    try:
+        return driver.execute_script("return document.readyState") == "complete"
+    except Exception:
+        return False
+
+def close_blank_tabs(driver):
+    handles = driver.window_handles[:]
+    for h in handles:
+        driver.switch_to.window(h)
+        url = driver.current_url
+        if url.startswith(("about:blank", "chrome://newtab", "chrome://")):
+            try: driver.close()
+            except Exception: pass
+    if driver.window_handles:
+        driver.switch_to.window(driver.window_handles[-1])
+
+def hard_nav(driver, url, attempts=4):
+    for _ in range(attempts):
+        try:
+            driver.get(url); time.sleep(0.5)
+            if ready(driver) and driver.current_url.startswith("http"):
+                return True
+        except Exception:
+            pass
+        try:
+            driver.execute_script("window.location.href = arguments[0];", url); time.sleep(0.5)
+            if ready(driver) and driver.current_url.startswith("http"):
+                return True
+        except Exception:
+            pass
+        try:
+            driver.switch_to.new_window('tab')
+            driver.get(url); time.sleep(0.7)
+            if ready(driver) and driver.current_url.startswith("http"):
+                close_blank_tabs(driver)
+                return True
+        except Exception:
+            pass
+        time.sleep(0.3)
+    close_blank_tabs(driver)
+    return False
+
 # =============================
 # 1) Parse date argument (d/m/Y) or use today's date
 # =============================
@@ -83,9 +137,8 @@ else:
     print(f"📅 Using date: {selected_date} (today)")
 
 # =============================
-# 2) Load Excel file (attendance.xlsx)
+# 2) Load Excel file (OS V attendance.xlsx)
 # =============================
-
 attendance_df = pd.read_excel(file_path, sheet_name="Attendance", header=1)
 setup_df = pd.read_excel(file_path, sheet_name="Initial Setup", header=None)
 subject_code = str(setup_df.iloc[1, 1]).strip()
@@ -119,72 +172,26 @@ absentees = (
 print("Absentees (IDs to untick):", absentees)
 
 # =============================
-# 3) Selenium Automation with a dedicated Chrome Profile
+# 3) Selenium with webdriver-manager (auto ChromeDriver)
 # =============================
-PROFILE_DIR = os.path.abspath("./slcm_automation_profile")
+# You can switch to your real Chrome profile by replacing the profile dir below
+PROFILE_DIR = os.path.abspath("./slcm_automation_profile")  # dedicated reusable profile
 os.makedirs(PROFILE_DIR, exist_ok=True)
 
 options = webdriver.ChromeOptions()
 options.add_argument(f"--user-data-dir={PROFILE_DIR}")
 options.add_argument("--no-first-run")
 options.add_argument("--no-default-browser-check")
-# options.add_argument("--headless=new")  # keep visible for SSO/Lightning
+# options.add_argument("--headless=new")  # uncomment to run headless if needed
 
-driver = webdriver.Chrome(options=options)
-
-HOME_URL  = "https://maheslcmtech.lightning.force.com/lightning/page/home"
-BASE_URL  = "https://maheslcmtech.lightning.force.com"
-LOGIN_URL = "https://maheslcm.manipal.edu/login"
-
-def ready():
-    try:
-        return driver.execute_script("return document.readyState") == "complete"
-    except Exception:
-        return False
-
-def close_blank_tabs():
-    handles = driver.window_handles[:]
-    for h in handles:
-        driver.switch_to.window(h)
-        url = driver.current_url
-        if url.startswith("about:blank") or url.startswith("chrome://newtab") or url.startswith("chrome://"):
-            try:
-                driver.close()
-            except Exception:
-                pass
-    if driver.window_handles:
-        driver.switch_to.window(driver.window_handles[-1])
-
-def hard_nav(url, attempts=4):
-    for _ in range(attempts):
-        try:
-            driver.get(url); time.sleep(0.5)
-            if ready() and driver.current_url.startswith("http"):
-                return True
-        except Exception:
-            pass
-        try:
-            driver.execute_script("window.location.href = arguments[0];", url); time.sleep(0.5)
-            if ready() and driver.current_url.startswith("http"):
-                return True
-        except Exception:
-            pass
-        try:
-            driver.switch_to.new_window('tab')
-            driver.get(url); time.sleep(0.7)
-            if ready() and driver.current_url.startswith("http"):
-                close_blank_tabs()
-                return True
-        except Exception:
-            pass
-        time.sleep(0.3)
-    close_blank_tabs()
-    return False
+# 👉 webdriver-manager auto-installs the matching ChromeDriver
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
 
 # --- Bootstrap: force navigation & handle SSO once ---
-if not hard_nav(HOME_URL):
-    hard_nav(BASE_URL)
-    hard_nav(HOME_URL)
+if not hard_nav(driver, HOME_URL):
+    hard_nav(driver, BASE_URL)
+    hard_nav(driver, HOME_URL)
 
 cur = driver.current_url.lower()
 print("🌐 After bootstrap:", cur)
@@ -192,7 +199,7 @@ print("🌐 After bootstrap:", cur)
 if ("login.microsoftonline.com" in cur) or ("saml" in cur) or ("manipal.edu" in cur and "/login" in cur):
     print("🔐 SSO/login detected. Complete it in the opened Chrome window.")
     input("Press Enter here AFTER you reach Salesforce Home... ")
-    hard_nav(HOME_URL)
+    hard_nav(driver, HOME_URL)
 
 # Verify we’re on Lightning Home
 WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "//a[@title='Calendar']")))
@@ -233,10 +240,10 @@ except Exception:
 click_attendance_tab_fast(driver)
 
 # =============================
-# 5) Untick Absentees
+# 5) Untick Absentees + console summary
 # =============================
 print("🔎 Searching for each absentee ID on page...")
-unticked = 0
+unticked_ids = []
 not_found = []
 
 for ab in absentees:
@@ -249,13 +256,20 @@ for ab in absentees:
         if checkbox.is_selected():
             js_click(driver, checkbox)
             print(f"✔️ Unticked absentee: {ab}")
-            unticked += 1
+            unticked_ids.append(ab)
+        else:
+            print(f"ℹ️ Already unticked: {ab}")
     except Exception:
         not_found.append(ab)
 
-print(f"✔️ Unticked (absentees): {unticked}")
+# --- Final summary in console ---
+print("\n📊 Attendance Summary")
+print(f"✔️ Successfully unticked: {len(unticked_ids)}")
+print(f"❌ Not unticked (not found on page): {len(not_found)}")
 if not_found:
-    print(f"❓ Not found ({len(not_found)}): {not_found}")
+    print("👉 IDs not unticked:")
+    for nf in not_found:
+        print(f"   - {nf}")
 
 # =============================
 # 6) Submit & Confirm (robust)
@@ -320,15 +334,13 @@ except Exception as e:
     print("⚠️ Could not confirm submission:", e)
 
 # =============================
-# 7) Done
+# 7) Done + developer credit
 # =============================
 print("🎉 Attendance marking complete!")
 time.sleep(1.5)
 driver.quit()
 
-# -----------------------------------------------------------------------------
-# 8) Developer 
-# -----------------------------------------------------------------------------
-print("\n=================================================")
+print("\n====================================================")
 print("👨‍💻 Developed by: Anirudhan Adukkathayar C, SCE, MIT")
-print("===================================================\n")
+print("====================================================\n")
+
