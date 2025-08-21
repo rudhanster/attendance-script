@@ -20,7 +20,7 @@ This project automates attendance marking in the **MAHE SLCM portal** using Sele
    - Install **Python 3.11+**.
    - On **Windows**, the easiest way:
      - Open Microsoft Store.
-     - Search for **Python 3.11** (or later).
+     - Search for **Python **.
      - Click **Get** and install.
    - Verify installation:
      ```bash
