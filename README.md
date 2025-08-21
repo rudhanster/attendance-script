@@ -86,6 +86,9 @@ SLCM calender should be set to default view , that is #week view.
 ### ⚠️ Important
 Session number in excel sheet should be blank for theory and 1 or 2 for lab[batch number|
 
+### ⚠️ Important
+Attendance should be marked as `ab` in excel sheet.
+
 ---
 
 ## ▶️ Running the Script
