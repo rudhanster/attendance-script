@@ -64,13 +64,13 @@ This sheet provides metadata that the script uses to correctly match the course 
 
 ### Required Fields
 
-| Field         | Example Value             | Notes                                                       |
-|---------------|---------------------------|-------------------------------------------------------------|
+| Field         | Example Value              | Notes                                                       |
+|---------------|----------------------------|-------------------------------------------------------------|
 | Course Name   | Operating Systems Lab      | Free text, used for human readability only                  |
 | Course Code   | CSE 3142                   | **Must exactly match** the course code in SLCM              |
 | Semester      | V                          | Roman numeral or value as displayed in SLCM                 |
 | Class Section | B                          | Section identifier (A, B, C …)                              |
-| Session       | 1                          | Session number as shown in the SLCM event (1, 2, …)         |
+| Session       |                            | Session number as shown in the SLCM event (1, 2, …) for lab         |
 
 ---
 
