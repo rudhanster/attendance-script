@@ -33,10 +33,11 @@ This project automates attendance marking in the **MAHE SLCM portal** using Sele
 
 2. **Install Dependencies**
    - Open **Command Prompt** (Windows) or **Terminal** (macOS/Linux).
-   - Navigate to the project folder where `requirements.txt` is located.
+  
    - Run:
      ```bash
-     pip install -r requirements.txt
+     pip install selenium pandas openpyxl webdriver-manager
+
      ```
 
 3. **Google Chrome**
