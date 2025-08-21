@@ -70,7 +70,7 @@ This sheet provides metadata that the script uses to correctly match the course 
 | Course Code   | CSE 3142                   | **Must exactly match** the course code in SLCM              |
 | Semester      | V                          | Roman numeral or value as displayed in SLCM                 |
 | Class Section | B                          | Section identifier (A, B, C …)                              |
-| Session       |                            | Session number as shown in the SLCM event (1, 2, …) for lab         |
+| Session       |                            | Session number as shown in the SLCM  (1, 2, …) for lab[##Keep it blank for theory|
 
 ---
 
@@ -79,9 +79,11 @@ This sheet provides metadata that the script uses to correctly match the course 
 These values must **exactly match** the subject event text in the SLCM Calendar.  
 Otherwise, the script will not be able to locate the correct event for attendance.
 
-Example event in SLCM Calendar:
+### ⚠️ Important
+SLCM calender should be default. that is week view.
 
-
+### ⚠️ Important
+Session number in excel sheet should be blank for theory and 1 or 2 for lab[batch number|
 
 ---
 
