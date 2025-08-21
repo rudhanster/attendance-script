@@ -57,8 +57,31 @@ This project automates attendance marking in the **MAHE SLCM portal** using Sele
      ```
 3. Ensure the Excel format:
    - Sheet **"Attendance"** contains registration numbers and attendance (`ab` for absentees).
-   - Sheet **"Initial Setup"**, cell **B2**, contains the **course code**.  
-     ⚠️ This course code must exactly match the subject code shown in SLCM Calendar events.
+   - Sheet **"Initial Setup"**, 
+
+
+This sheet provides metadata that the script uses to correctly match the course in the SLCM Calendar.  
+
+### Required Fields
+
+| Field         | Example Value             | Notes                                                       |
+|---------------|---------------------------|-------------------------------------------------------------|
+| Course Name   | Operating Systems Lab      | Free text, used for human readability only                  |
+| Course Code   | CSE 3142                   | **Must exactly match** the course code in SLCM              |
+| Semester      | V                          | Roman numeral or value as displayed in SLCM                 |
+| Class Section | B                          | Section identifier (A, B, C …)                              |
+| Session       | 1                          | Session number as shown in the SLCM event (1, 2, …)         |
+
+---
+
+### ⚠️ Important
+
+These values must **exactly match** the subject event text in the SLCM Calendar.  
+Otherwise, the script will not be able to locate the correct event for attendance.
+
+Example event in SLCM Calendar:
+
+
 
 ---
 
