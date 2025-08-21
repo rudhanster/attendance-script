@@ -80,7 +80,7 @@ These values must **exactly match** the subject event text in the SLCM Calendar.
 Otherwise, the script will not be able to locate the correct event for attendance.
 
 ### ⚠️ Important
-SLCM calender should be default. that is week view.
+SLCM calender should be set to default view , that is #week view.
 
 ### ⚠️ Important
 Session number in excel sheet should be blank for theory and 1 or 2 for lab[batch number|
