@@ -88,7 +88,7 @@ At the end of execution, the script prints:
 - ❓ Students not found in the portal.
 - 🎉 Confirmation that attendance was submitted.
 
-# MAHE SLCM Attendance Automation
+
 
 ⚠️ **DISCLAIMER**
 
