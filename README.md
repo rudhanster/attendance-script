@@ -88,6 +88,19 @@ At the end of execution, the script prints:
 - ❓ Students not found in the portal.
 - 🎉 Confirmation that attendance was submitted.
 
+# MAHE SLCM Attendance Automation
+
+⚠️ **DISCLAIMER**
+
+This script is **NOT** an official part of MAHE SLCM.  
+It automates browser actions to help with attendance marking, but:  
+
+- It may fail if the website UI changes.  
+- Incorrect automation may result in **wrong attendance submission**.  
+- ✅ Always **manually verify attendance** after running the script.  
+- The developer holds **no responsibility** for misuse or errors.  
+- Use at your **own risk**. 
+
 ---
 
 ## 👨‍💻 Developer
