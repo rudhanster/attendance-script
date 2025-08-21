@@ -90,7 +90,7 @@ At the end of execution, the script prints:
 
 
 
-⚠️ **DISCLAIMER**
+## ⚠️ **DISCLAIMER**
 
 This script is **NOT** an official part of MAHE SLCM.  
 It automates browser actions to help with attendance marking, but:  
