@@ -22,13 +22,11 @@ from selenium.common.exceptions import (
 # Config
 # =============================
 file_path = "./attendance.xlsx"  # Excel file name expected in the same folder
-
 # --- Check if file exists ---
 if not os.path.exists(file_path):
     print(f"❌ Excel file not found: {file_path}")
     print("👉 Please place 'attendance.xlsx' in the same folder as this script.")
     sys.exit(1)
-
 
 HOME_URL  = "https://maheslcmtech.lightning.force.com/lightning/page/home"
 BASE_URL  = "https://maheslcmtech.lightning.force.com"
@@ -516,4 +514,5 @@ driver.quit()
 print("\n====================================================")
 print("👨‍💻 Developed by: Anirudhan Adukkathayar C, SCE, MIT")
 print("====================================================\n")
+
 
