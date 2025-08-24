@@ -1,4 +1,4 @@
-# Automated Attendance Marker (MAHE SLCM) — Enhanced Version
+# Automated Attendance Marker (MAHE SLCM)
 
 This tool automates attendance marking in the **MAHE SLCM portal** using Selenium and your Excel register.  
 
