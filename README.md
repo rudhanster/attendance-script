@@ -51,11 +51,9 @@ This project automates attendance marking in the **MAHE SLCM portal** using Sele
 ## 📂 Project Setup
 
 1. Clone or download this repository.
-2. Place your **Excel file** in the project directory.
-   - The file **must be named exactly**:
-     ```
-     attendance.xlsx
-     ```
+2. Preferably place your **Excel file** in the project directory.
+  
+
 3. Ensure the Excel format:
    - Sheet **"Attendance"** contains registration numbers and attendance (`ab` for absentees).
    - Sheet **"Initial Setup"**, 
@@ -84,7 +82,7 @@ Otherwise, the script will not be able to locate the correct event for attendanc
 SLCM calender should be set to default view , that is #week view.
 
 ### ⚠️ Important
-Session number in excel sheet should be blank for theory and 1 or 2 for lab[batch number|
+Session number in excel sheet should be  1 or 2 for lab[batch number|
 
 ### ⚠️ Important
 Attendance should be marked as `ab` in excel sheet.
