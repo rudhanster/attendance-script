@@ -1,9 +1,13 @@
 import sys
 import os
 import time
+import json
+import tempfile
+import shutil
 import re
 import pandas as pd
 from datetime import datetime
+
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
@@ -15,14 +19,12 @@ from selenium.webdriver.common.keys import Keys
 from selenium.common.exceptions import (
     StaleElementReferenceException,
     TimeoutException,
+    SessionNotCreatedException,
 )
-import json
-# =============================
-# Excel path resolver (with UI picker + persisted config)
-# =============================
-import json
 
-# Support both normal script runs and interactive runs with no __file__
+# =============================
+# Excel path resolver (UI picker + persisted config)
+# =============================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
 CONFIG_FILE = os.path.join(BASE_DIR, "attendance_config.json")
 
@@ -106,16 +108,13 @@ def resolve_excel_path(default_name="./attendance.xlsx"):
     save_excel_path(picked)
     return picked
 
-# ------ NOW resolve and use the path ------
+# ------ Resolve and use the path ------
 file_path = resolve_excel_path("./attendance.xlsx")
 print(f"🗂️  Excel file: {file_path}")
-
 
 # =============================
 # Config
 # =============================
-
-
 HOME_URL  = "https://maheslcmtech.lightning.force.com/lightning/page/home"
 BASE_URL  = "https://maheslcmtech.lightning.force.com"
 LOGIN_URL = "https://maheslcm.manipal.edu/login"
@@ -246,8 +245,8 @@ def matches_event_text(txt: str, code: str, sem: str, sec: str, sess: str) -> bo
     if sec:
         # allow "SEC B" or "SECTION B"
         ok = ok and (f"SEC {sec.upper()}" in T or f"SECTION {sec.upper()}" in T)
-    if sess and sess.strip():
-        sess = sess.strip()
+    if sess and str(sess).strip() and str(sess).strip().lower() != "nan":
+        sess = str(sess).strip()
         sess_ok = False
         # "Sec B-1" style
         if sec and f"{sec.upper()}-{sess}".upper() in T:
@@ -302,24 +301,47 @@ else:
     print(f"📅 Using date: {selected_date} (today)")
 
 # =============================
-# 2) Load Excel file + Initial Setup fields
+# 2) Load Excel file + Initial Setup fields (Session optional)
 # =============================
-attendance_df = pd.read_excel(file_path, sheet_name="Attendance", header=1)
-setup_df = pd.read_excel(file_path, sheet_name="Initial Setup", header=None)
+try:
+    attendance_df = pd.read_excel(file_path, sheet_name="Attendance", header=1)
+    setup_df = pd.read_excel(file_path, sheet_name="Initial Setup", header=None)
+except FileNotFoundError:
+    print(f"❌ Excel file not found: {file_path}")
+    sys.exit(1)
+except Exception as e:
+    print(f"❌ Failed to read Excel: {e}")
+    sys.exit(1)
+
+def val_or_empty(x):
+    s = str(x).strip()
+    return "" if s.lower() in ("nan", "none", "null") else s
 
 # Extract values from Initial Setup (Column B values on rows 1..5)
-course_name   = str(setup_df.iloc[0, 1]).strip() if len(setup_df) > 0 else ""
-course_code   = str(setup_df.iloc[1, 1]).strip() if len(setup_df) > 1 else ""
-semester      = str(setup_df.iloc[2, 1]).strip() if len(setup_df) > 2 else ""
-class_section = str(setup_df.iloc[3, 1]).strip() if len(setup_df) > 3 else ""
-session_no    = str(setup_df.iloc[4, 1]).strip() if len(setup_df) > 4 else ""
+course_name   = val_or_empty(setup_df.iloc[0, 1]) if len(setup_df) > 0 else ""
+course_code   = val_or_empty(setup_df.iloc[1, 1]) if len(setup_df) > 1 else ""
+semester      = val_or_empty(setup_df.iloc[2, 1]) if len(setup_df) > 2 else ""
+class_section = val_or_empty(setup_df.iloc[3, 1]) if len(setup_df) > 3 else ""
+session_no    = val_or_empty(setup_df.iloc[4, 1]) if len(setup_df) > 4 else ""  # optional
 
 print("\n📘 Course Details from Initial Setup:")
-print(f"   Course Name   : {course_name}")
-print(f"   Course Code   : {course_code}")
-print(f"   Semester      : {semester}")
-print(f"   Class Section : {class_section}")
-print(f"   Session       : {session_no}\n")
+print(f"   Course Name   : {course_name or '(blank)'}")
+print(f"   Course Code   : {course_code or '(blank)'}")
+print(f"   Semester      : {semester or '(blank)'}")
+print(f"   Class Section : {class_section or '(blank)'}")
+print(f"   Session       : {session_no or '(blank/optional)'}\n")
+
+# Validate required fields (session optional)
+missing = []
+if not course_code:   missing.append("Course Code (B2)")
+if not semester:      missing.append("Semester (B3)")
+if not class_section: missing.append("Class Section (B4)")
+if missing:
+    print("⚠️ Initial Setup is incomplete. Required fields missing:")
+    for m in missing:
+        print(f"   - {m}")
+    print("Please fill these in 'Initial Setup' sheet and re-run.")
+    sys.exit(1)
 
 def find_date_column(columns, target_date):
     for col in columns:
@@ -335,7 +357,8 @@ def find_date_column(columns, target_date):
 
 date_col = find_date_column(attendance_df.columns, selected_date)
 if date_col is None:
-    raise ValueError("❌ No column found for the specified date")
+    print("❌ No column found for the specified date in the 'Attendance' sheet.")
+    sys.exit(1)
 print(f"✅ Using date column in sheet: {date_col}")
 
 # Extract absentees
@@ -350,18 +373,44 @@ absentees = (
 print("Absentees (IDs to untick):", absentees)
 
 # =============================
-# 3) Selenium with webdriver-manager (auto ChromeDriver)
+# 3) Selenium with webdriver-manager (auto ChromeDriver) + Profile fallback
 # =============================
 PROFILE_DIR = os.path.abspath("./slcm_automation_profile")  # dedicated reusable profile
 os.makedirs(PROFILE_DIR, exist_ok=True)
 
-options = webdriver.ChromeOptions()
-options.add_argument(f"--user-data-dir={PROFILE_DIR}")
-options.add_argument("--no-first-run")
-options.add_argument("--no-default-browser-check")
-# options.add_argument("--headless=new")  # keep visible for SSO/Lightning
+# Optional: clear leftover Chrome lock files if the profile isn't actually open
+for name in os.listdir(PROFILE_DIR):
+    if name.startswith("Singleton"):
+        try:
+            os.remove(os.path.join(PROFILE_DIR, name))
+        except Exception:
+            pass
 
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+TEMP_PROFILE_DIR = None  # set when we fall back
+
+def build_options(user_data_dir):
+    opts = webdriver.ChromeOptions()
+    opts.add_argument(f"--user-data-dir={user_data_dir}")
+    opts.add_argument("--no-first-run")
+    opts.add_argument("--no-default-browser-check")
+    # opts.add_argument("--headless=new")  # keep visible for SSO/Lightning
+    return opts
+
+def start_driver_with_fallback():
+    """Try dedicated profile; if locked, fall back to a fresh temp profile."""
+    global TEMP_PROFILE_DIR
+    try:
+        options = build_options(PROFILE_DIR)
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=options)
+    except SessionNotCreatedException:
+        print("⚠️ Dedicated profile is in use/locked. Falling back to a fresh temp profile...")
+        TEMP_PROFILE_DIR = tempfile.mkdtemp(prefix="slcm_profile_")
+        options = build_options(TEMP_PROFILE_DIR)
+        service = Service(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=options)
+
+driver = start_driver_with_fallback()
 
 # --- Bootstrap / SSO ---
 if not hard_nav(driver, HOME_URL):
@@ -394,14 +443,13 @@ time.sleep(0.15)
 day_number = str(selected_date.day).lstrip("0")
 click_calendar_date_fast(driver, day_number)
 
-# --- Search all iframes for subject tiles by Course Code + Semester + Section + Session ---
+# --- Search all iframes for subject tiles by Course Code + Semester + Section + Session (session optional) ---
 driver.switch_to.default_content()
 candidates = []
 iframes = driver.find_elements(By.TAG_NAME, "iframe")
 
 def scan_in_context(ctx_driver, frame_index):
     found = []
-    # broader sweep: role=button links, buttons, nodes with title, or truncation class
     nodes = ctx_driver.find_elements(By.XPATH, "//a[contains(@role,'button')] | //button | //*[@title] | //*[contains(@class,'slds-truncate')]")
     for el in nodes:
         try:
@@ -427,7 +475,7 @@ for idx in range(len(iframes)):
         driver.switch_to.default_content()
 
 if not candidates:
-    # fallback: accept course code only (if strict filters missed due to wording)
+    # fallback: accept course code only
     for idx in [None] + list(range(len(iframes))):
         try:
             driver.switch_to.default_content()
@@ -449,9 +497,12 @@ if not candidates:
 driver.switch_to.default_content()
 
 if not candidates:
-    # brief dump to help diagnose
     print("⚠️ No event matched the criteria. Could not find a tile for the selected date.")
     driver.quit()
+    # cleanup temp profile if used
+    if 'TEMP_PROFILE_DIR' in globals() and TEMP_PROFILE_DIR:
+        try: shutil.rmtree(TEMP_PROFILE_DIR, ignore_errors=True)
+        except Exception: pass
     sys.exit(1)
 
 print("🎯 Found candidate(s):")
@@ -468,6 +519,9 @@ for cand in candidates:
     time.sleep(0.25)
 if not clicked:
     driver.quit()
+    if 'TEMP_PROFILE_DIR' in globals() and TEMP_PROFILE_DIR:
+        try: shutil.rmtree(TEMP_PROFILE_DIR, ignore_errors=True)
+        except Exception: pass
     raise RuntimeError("❌ Could not click any candidate event tile")
 
 # "More Details" if a popover appears; otherwise Lightning may navigate directly
@@ -593,15 +647,18 @@ except Exception as e:
     print("⚠️ Could not confirm submission:", e)
 
 # =============================
-# 7) Done + credit
+# 7) Done + credit + temp profile cleanup
 # =============================
 print("🎉 Attendance marking complete!")
 time.sleep(1.5)
 driver.quit()
 
+# Clean up temp profile if we used one
+if 'TEMP_PROFILE_DIR' in globals() and TEMP_PROFILE_DIR:
+    try: shutil.rmtree(TEMP_PROFILE_DIR, ignore_errors=True)
+    except Exception: pass
+
 print("\n====================================================")
 print("👨‍💻 Developed by: Anirudhan Adukkathayar C, SCE, MIT")
 print("====================================================\n")
-
-
 
