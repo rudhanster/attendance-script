@@ -59,7 +59,7 @@ Your Excel workbook **must contain** two sheets:
 | Course Name   | Operating Systems Lab      | Free text, for readability only                                       |
 | Course Code   | CSE 3142                   | **Must exactly match** SLCM Calendar subject code                     |
 | Semester      | V                          | Roman numeral or value exactly as shown in SLCM                       |
-| Class Section | B                          | Section identifier (A, B, C …)       or B-1, B-2 etc                                 |
+| Class Section | B-1                        | Section identifier (A, B, C …)       or B-1, B-2 etc                                 |
 
 
 ⚠️ **Important**  
