@@ -6,7 +6,8 @@ import tempfile
 import shutil
 import re
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date
+from pathlib import Path
 
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -126,60 +127,6 @@ def js_click(driver, el):
     driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
     driver.execute_script("arguments[0].click();", el)
 
-def click_calendar_date_fast(driver, day_number: str):
-    """
-    Click the mini-calendar date using direct JS (fast).
-    Requires Calendar sidebar to be present.
-    """
-    js = """
-    const wrap = document.querySelector('#calendarSidebar');
-    if (!wrap) return false;
-    const dayNodes = wrap.querySelectorAll('table.datepicker .slds-day, .slds-day');
-    for (const n of dayNodes) {
-        const txt = (n.textContent || '').trim();
-        const disabled = n.getAttribute('aria-disabled') === 'true' || (n.className || '').includes('disabled');
-        if (!disabled && txt === arguments[0]) {
-            n.scrollIntoView({block:'center'});
-            n.click();
-            return true;
-        }
-    }
-    return false;
-    """
-    ok = driver.execute_script(js, day_number)
-    if not ok:
-        raise RuntimeError(f"❌ Could not click mini calendar date {day_number}")
-    print(f"✅ Clicked calendar date (fast): {day_number}")
-
-def click_attendance_tab_fast(driver):
-    """
-    Open the Attendance tab via direct JS (fast), with a short Selenium fallback.
-    """
-    js = """
-    let el = document.querySelector("a[data-label='Attendance']");
-    if (!el) {
-        const span = Array.from(document.querySelectorAll('span.title'))
-            .find(s => (s.textContent || '').trim() === 'Attendance');
-        if (span) el = span.closest('a, button, [role="tab"]') || span;
-    }
-    if (el) {
-        el.scrollIntoView({block:'center'});
-        el.click();
-        return true;
-    }
-    return false;
-    """
-    ok = driver.execute_script(js)
-    if ok:
-        print("✅ Opened Attendance tab (fast)")
-        return
-    # short fallback if JS missed due to render timing
-    att_tab = WebDriverWait(driver, 8).until(
-        EC.element_to_be_clickable((By.XPATH, "//a[@data-label='Attendance'] | //span[@class='title' and normalize-space()='Attendance']"))
-    )
-    js_click(driver, att_tab)
-    print("✅ Opened Attendance tab (fallback)")
-
 def ready(driver):
     try:
         return driver.execute_script("return document.readyState") == "complete"
@@ -228,9 +175,7 @@ def _norm(s: str) -> str:
 
 def matches_event_text(txt: str, code: str, sem: str, sec: str, sess: str) -> bool:
     """
-    Example event text:
-    "CSE 3142 - CSE 3142 - OPERATING SYSTEMS LAB - 905 - Semester V: Program Sec B-1."
-    We match:
+    We match within the event text:
       - course code -> "CSE 3142"
       - semester    -> "Semester V"
       - section     -> "Sec B" or "Section B"
@@ -243,58 +188,210 @@ def matches_event_text(txt: str, code: str, sem: str, sec: str, sess: str) -> bo
     if sem:
         ok = ok and (f"SEMESTER {sem.upper()}" in T)
     if sec:
-        # allow "SEC B" or "SECTION B"
         ok = ok and (f"SEC {sec.upper()}" in T or f"SECTION {sec.upper()}" in T)
     if sess and str(sess).strip() and str(sess).strip().lower() != "nan":
         sess = str(sess).strip()
         sess_ok = False
-        # "Sec B-1" style
         if sec and f"{sec.upper()}-{sess}".upper() in T:
             sess_ok = True
-        # "Session 1" style
         if not sess_ok and f"SESSION {sess}".upper() in T:
             sess_ok = True
         ok = ok and sess_ok
     return ok
 
-def click_event_candidate(driver, candidate):
-    """
-    Switch into candidate's iframe (if any), re-locate by text/title, then click.
-    'candidate' is a dict: {'frame_index': None or int, 'text': '...'}
-    """
-    driver.switch_to.default_content()
-    if candidate['frame_index'] is not None:
-        ifr = driver.find_elements(By.TAG_NAME, "iframe")
-        if candidate['frame_index'] >= len(ifr):
-            return False
-        driver.switch_to.frame(ifr[candidate['frame_index']])
+# --- NEW: down-only scroll & strict day-panel selection ---
+def _day_heading_variants(d: date):
+    # Salesforce day headings like "Saturday, August 23"
+    try:
+        return list({
+            d.strftime("%A, %B %-d"),
+            d.strftime("%A, %B %#d"),
+            d.strftime("%A, %B %d"),
+            d.strftime("%A, %B %-d, %Y"),
+            d.strftime("%A, %B %#d, %Y"),
+            d.strftime("%A, %B %d, %Y"),
+        })
+    except Exception:
+        return [d.strftime("%A, %B %d"), d.strftime("%A, %B %d, %Y")]
 
-    txt = _norm(candidate['text'])
-    probe = txt[:80]  # keep shorter for XPath contains()
+def disable_auto_scroll(driver):
+    driver.execute_script("""
+    (function(){
+      if (!window.__origScrollIntoView) {
+        window.__origScrollIntoView = Element.prototype.scrollIntoView;
+        Element.prototype.scrollIntoView = function(){};
+      }
+      try {
+        document.documentElement.style.scrollBehavior = 'auto';
+        document.body.style.scrollBehavior = 'auto';
+      } catch(e){}
+    })();
+    """)
 
-    locators = [
-        (By.XPATH, f"//a[contains(@role,'button') and contains(normalize-space(.), {repr(probe)})]"),
-        (By.XPATH, f"//*[@title and contains(normalize-space(@title), {repr(probe)})]"),
-        (By.XPATH, f"//*[contains(@class,'slds-truncate') and contains(normalize-space(.), {repr(probe)})]"),
-        (By.XPATH, f"//button[contains(normalize-space(.), {repr(probe)})]"),
-        (By.XPATH, f"//*[contains(normalize-space(.), {repr(probe)})]"),
-    ]
-    for by, xp in locators:
-        try:
-            el = WebDriverWait(driver, 8).until(EC.element_to_be_clickable((by, xp)))
-            js_click(driver, el)
-            driver.switch_to.default_content()
-            return True
-        except Exception:
-            continue
-    driver.switch_to.default_content()
+def enable_auto_scroll(driver):
+    driver.execute_script("""
+    (function(){
+      if (window.__origScrollIntoView) {
+        Element.prototype.scrollIntoView = window.__origScrollIntoView;
+        delete window.__origScrollIntoView;
+      }
+    })();
+    """)
+
+def scroll_to_day_panel(driver, target_date, timeout=40):
+    labels = _day_heading_variants(target_date)
+    container = WebDriverWait(driver, 20).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".calendarRow.slds-scrollable_y"))
+    )
+    driver.execute_script("arguments[0].setAttribute('tabindex','0'); arguments[0].focus();", container)
+
+    start = time.time()
+    last_top = driver.execute_script("return arguments[0].scrollTop;", container)
+    max_top = driver.execute_script("return arguments[0].scrollHeight - arguments[0].clientHeight;", container)
+    step = max(220, int(driver.execute_script("return Math.floor(arguments[0].clientHeight*0.9);", container)))
+
+    while time.time() - start < timeout:
+        res = driver.execute_script("""
+        const cont = arguments[0], labels = arguments[1];
+        function t(n){return (n && (n.innerText||n.textContent)||'').trim();}
+        function topWithin(node, anc){let y=0, el=node; while(el && el!==anc){y+=el.offsetTop; el=el.offsetParent;} return y;}
+        const heads = Array.from(cont.querySelectorAll('h2.slds-assistive-text'));
+        let H=null; for(const h of heads){ if(labels.includes(t(h))){H=h; break;} }
+        if(!H) return {found:false, cur:cont.scrollTop, max:(cont.scrollHeight-cont.clientHeight)};
+        let sib = H.nextElementSibling;
+        while(sib && !sib.classList.contains('calendarDay')) sib = sib.nextElementSibling;
+        if(!sib) return {found:false, cur:cont.scrollTop, max:(cont.scrollHeight-cont.clientHeight)};
+        const targetTop = Math.max(0, topWithin(sib, cont) - 80);
+        return {found:true, targetTop:targetTop, cur:cont.scrollTop, max:(cont.scrollHeight-cont.clientHeight)};
+        """, container, labels)
+
+        cur = res.get("cur", 0)
+        max_top = res.get("max", max_top)
+
+        if res.get("found"):
+            tgt = min(res["targetTop"], max_top)
+            if tgt < cur:
+                tgt = cur   # enforce DOWN-ONLY
+            driver.execute_script("arguments[0].scrollTop = arguments[1];", container, tgt)
+            time.sleep(0.25)
+            cur2 = driver.execute_script("return arguments[0].scrollTop;", container)
+            if abs(cur2 - tgt) <= step:
+                return True
+
+        # keep scrolling down
+        next_top = min(max_top, max(cur, last_top) + step)
+        driver.execute_script("arguments[0].scrollTop = arguments[1];", container, next_top)
+        time.sleep(0.25)
+        new_top = driver.execute_script("return arguments[0].scrollTop;", container)
+
+        if new_top < last_top:
+            driver.execute_script("arguments[0].scrollTop = arguments[1];", container, last_top + step)
+            time.sleep(0.2)
+            new_top = driver.execute_script("return arguments[0].scrollTop;", container)
+            step = min(step + 100, 1400)
+
+        last_top = new_top
+        if last_top >= max_top - 2:
+            break
     return False
+
+def get_day_panel_webelement(driver, target_date):
+    labels = _day_heading_variants(target_date)
+    container = WebDriverWait(driver, 15).until(
+        EC.presence_of_element_located((By.CSS_SELECTOR, ".calendarRow.slds-scrollable_y"))
+    )
+    panel = driver.execute_script("""
+      const cont = arguments[0], labels = arguments[1];
+      function text(n){ return (n && (n.innerText || n.textContent) || '').trim(); }
+      const heads = Array.from(cont.querySelectorAll('h2.slds-assistive-text'));
+      let H=null; for(const h of heads){ if(labels.includes(text(h))){ H=h; break; } }
+      if(!H) return null;
+      let sib = H.nextElementSibling;
+      while(sib && !sib.classList.contains('calendarDay')) { sib = sib.nextElementSibling; }
+      return sib || null;
+    """, container, labels)
+    return panel  # WebElement or None
+
+def open_event_from_day_panel(driver, target_date, code, sem, sec, sess):
+    panel = get_day_panel_webelement(driver, target_date)
+    if not panel:
+        return False
+
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'start'});", panel)
+        time.sleep(0.2)
+    except Exception:
+        pass
+
+    links = panel.find_elements(By.CSS_SELECTOR, "a.subject-link, a[data-id='subject-link']")
+    if not links:
+        return False
+
+    best, best_href = None, None
+    for el in links:
+        try:
+            txt = (el.text or el.get_attribute("innerText") or "").strip()
+            if not txt:
+                continue
+            if matches_event_text(txt, code, sem, sec, sess):
+                href = el.get_attribute("href") or ""
+                if href.startswith("/lightning/r/") or "lightning/r/" in href:
+                    best, best_href = el, href
+                    break
+                if best is None:
+                    best, best_href = el, href
+        except StaleElementReferenceException:
+            continue
+
+    if not best:
+        return False
+
+    # Click the exact element we found in THIS day panel
+    try:
+        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", best)
+        time.sleep(0.1)
+        driver.execute_script("arguments[0].click();", best)
+    except Exception:
+        try:
+            best.click()
+        except Exception:
+            return False
+
+    if not best_href or best_href.strip() in ("", "javascript:void(0)", "#"):
+        try:
+            more_details = WebDriverWait(driver, 8).until(
+                EC.element_to_be_clickable((By.XPATH, "//a[normalize-space()='More Details']"))
+            )
+            js_click(driver, more_details)
+        except Exception:
+            try:
+                preview_icon = WebDriverWait(driver, 4).until(
+                    EC.element_to_be_clickable((By.CSS_SELECTOR, "a.previewIcon, a[aria-label='Preview icon']"))
+                )
+                js_click(driver, preview_icon)
+                more_details = WebDriverWait(driver, 6).until(
+                    EC.element_to_be_clickable((By.XPATH, "//a[normalize-space()='More Details']"))
+                )
+                js_click(driver, more_details)
+            except Exception:
+                pass
+
+    return True
 
 # =============================
 # 1) Parse date argument (d/m/Y) or use today's date
 # =============================
+def parse_date_any(s: str) -> date:
+    s = s.strip()
+    fmts = ["%d/%m/%Y","%d-%m-%Y","%Y-%m-%d","%d-%b-%y","%d-%b-%Y",
+            "%A, %d %B %Y","%A, %d %B %Y at %I:%M:%S %p"]
+    for f in fmts:
+        try: return datetime.strptime(s, f).date()
+        except Exception: pass
+    return pd.to_datetime(s, dayfirst=True).date()
+
 if len(sys.argv) > 1:
-    selected_date = datetime.strptime(sys.argv[1], "%d/%m/%Y").date()
+    selected_date = parse_date_any(sys.argv[1])
     print(f"📅 Using date: {selected_date} (from argument)")
 else:
     selected_date = datetime.today().date()
@@ -422,14 +519,18 @@ print("🌐 After bootstrap:", cur)
 
 if ("login.microsoftonline.com" in cur) or ("saml" in cur) or ("manipal.edu" in cur and "/login" in cur):
     print("🔐 SSO/login detected. Complete it in the opened Chrome window.")
-    input("Press Enter here AFTER you reach Salesforce Home... ")
+    try:
+        input("Press Enter here AFTER you reach Salesforce Home... ")
+    except EOFError:
+        print("⏳ Waiting 60s for manual login (no console input available)...")
+        time.sleep(60)
     hard_nav(driver, HOME_URL)
 
 WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, "//a[@title='Calendar']")))
 print("✅ Logged in & on Lightning Home")
 
 # =============================
-# 4) Calendar → date → subject → Attendance
+# 4) Calendar → date → down-only scroll to the day's panel → open event
 # =============================
 # Open Calendar tab
 cal_tab = WebDriverWait(driver, 40).until(
@@ -437,92 +538,52 @@ cal_tab = WebDriverWait(driver, 40).until(
 )
 js_click(driver, cal_tab)
 
-# Click date (fast)
-WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "calendarSidebar")))
+# Click date (mini calendar)
+WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.ID, "calendarSidebar")))
 time.sleep(0.15)
 day_number = str(selected_date.day).lstrip("0")
-click_calendar_date_fast(driver, day_number)
+ok = driver.execute_script("""
+const wrap = document.querySelector('#calendarSidebar');
+if (!wrap) return false;
+const dayNodes = wrap.querySelectorAll('table.datepicker .slds-day, .slds-day');
+for (const n of dayNodes) {
+  const txt = (n.textContent || '').trim();
+  const disabled = n.getAttribute('aria-disabled') === 'true' || (n.className || '').includes('disabled');
+  if (!disabled && txt === arguments[0]) {
+    n.scrollIntoView({block:'center'}); n.click(); return true;
+  }
+}
+return false;
+""", day_number)
+if not ok:
+    raise RuntimeError(f"❌ Could not click mini calendar date {day_number}")
+print(f"✅ Clicked calendar date (fast): {day_number}")
 
-# --- Search all iframes for subject tiles by Course Code + Semester + Section + Session (session optional) ---
-driver.switch_to.default_content()
-candidates = []
-iframes = driver.find_elements(By.TAG_NAME, "iframe")
+# Ensure day list exists
+WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CSS_SELECTOR, ".calendarRow.slds-scrollable_y")))
 
-def scan_in_context(ctx_driver, frame_index):
-    found = []
-    nodes = ctx_driver.find_elements(By.XPATH, "//a[contains(@role,'button')] | //button | //*[@title] | //*[contains(@class,'slds-truncate')]")
-    for el in nodes:
-        try:
-            txt = (el.get_attribute("innerText") or el.get_attribute("title") or el.text or "").strip()
-            if not txt:
-                continue
-            if matches_event_text(txt, course_code, semester, class_section, session_no):
-                found.append({"frame_index": frame_index, "text": txt})
-        except StaleElementReferenceException:
-            continue
-    return found
+# Down-only scroll to the correct day's panel
+disable_auto_scroll(driver)
+try:
+    ok_scroll = scroll_to_day_panel(driver, selected_date, timeout=40)
+finally:
+    enable_auto_scroll(driver)
 
-# top document first
-candidates.extend(scan_in_context(driver, None))
-# then each iframe
-for idx in range(len(iframes)):
-    try:
-        driver.switch_to.frame(iframes[idx])
-        candidates.extend(scan_in_context(driver, idx))
-    except Exception:
-        pass
-    finally:
-        driver.switch_to.default_content()
-
-if not candidates:
-    # fallback: accept course code only
-    for idx in [None] + list(range(len(iframes))):
-        try:
-            driver.switch_to.default_content()
-            if idx is not None:
-                driver.switch_to.frame(iframes[idx])
-            nodes = driver.find_elements(By.XPATH, "//*[normalize-space(@title) or normalize-space(text())]")
-            for el in nodes:
-                try:
-                    txt = (el.get_attribute("innerText") or el.get_attribute("title") or el.text or "").strip()
-                    if not txt:
-                        continue
-                    if course_code and course_code.upper() in _norm(txt).upper():
-                        candidates.append({"frame_index": idx, "text": txt})
-                except StaleElementReferenceException:
-                    continue
-        except Exception:
-            pass
-
-driver.switch_to.default_content()
-
-if not candidates:
-    print("⚠️ No event matched the criteria. Could not find a tile for the selected date.")
+if not ok_scroll:
+    print("⚠️ Could not scroll down to the selected day's panel.")
     driver.quit()
-    # cleanup temp profile if used
-    if 'TEMP_PROFILE_DIR' in globals() and TEMP_PROFILE_DIR:
+    if TEMP_PROFILE_DIR:
         try: shutil.rmtree(TEMP_PROFILE_DIR, ignore_errors=True)
         except Exception: pass
     sys.exit(1)
 
-print("🎯 Found candidate(s):")
-for c in candidates:
-    where = "top" if c['frame_index'] is None else f"iframe#{c['frame_index']}"
-    print(f" - [{where}] {c['text']}")
-
-# Click first candidate safely
-clicked = False
-for cand in candidates:
-    if click_event_candidate(driver, cand):
-        clicked = True
-        break
-    time.sleep(0.25)
-if not clicked:
+# Open event strictly from that day panel
+if not open_event_from_day_panel(driver, selected_date, course_code, semester, class_section, session_no):
     driver.quit()
-    if 'TEMP_PROFILE_DIR' in globals() and TEMP_PROFILE_DIR:
+    if TEMP_PROFILE_DIR:
         try: shutil.rmtree(TEMP_PROFILE_DIR, ignore_errors=True)
         except Exception: pass
-    raise RuntimeError("❌ Could not click any candidate event tile")
+    raise RuntimeError("❌ Could not open any candidate event tile for the selected date.")
 
 # "More Details" if a popover appears; otherwise Lightning may navigate directly
 try:
@@ -534,6 +595,24 @@ except Exception:
     pass  # direct navigation case
 
 # Open Attendance tab
+def click_attendance_tab_fast(driver):
+    js = """
+    let el = document.querySelector("a[data-label='Attendance']");
+    if (!el) {
+        const span = Array.from(document.querySelectorAll('span.title'))
+            .find(s => (s.textContent || '').trim() === 'Attendance');
+        if (span) el = span.closest('a, button, [role="tab"]') || span;
+    }
+    if (el) { el.click(); return true; }
+    return false;
+    """
+    ok = driver.execute_script(js)
+    if not ok:
+        att_tab = WebDriverWait(driver, 10).until(
+            EC.element_to_be_clickable((By.XPATH, "//a[@data-label='Attendance'] | //span[@class='title' and normalize-space()='Attendance']"))
+        )
+        js_click(driver, att_tab)
+
 click_attendance_tab_fast(driver)
 
 # =============================
