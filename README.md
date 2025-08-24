@@ -59,8 +59,8 @@ Your Excel workbook **must contain** two sheets:
 | Course Name   | Operating Systems Lab      | Free text, for readability only                                       |
 | Course Code   | CSE 3142                   | **Must exactly match** SLCM Calendar subject code                     |
 | Semester      | V                          | Roman numeral or value exactly as shown in SLCM                       |
-| Class Section | B                          | Section identifier (A, B, C …)                                        |
-| Session       | 1                          | Optional. Use for **labs/batches** (1, 2, …). Leave blank for theory. |
+| Class Section | B                          | Section identifier (A, B, C …)       or B-1, B-2 etc                                 |
+
 
 ⚠️ **Important**  
 - The **Course Code, Semester, Class Section, Session** must **exactly match** the subject event in SLCM Calendar.  
@@ -70,8 +70,8 @@ Your Excel workbook **must contain** two sheets:
   ```
   → Course Code = `CSE 3142`  
   → Semester = `V`  
-  → Class Section = `B`  
-  → Session = `1`  
+  → Class Section = `B-1`  
+
 
 ---
 
